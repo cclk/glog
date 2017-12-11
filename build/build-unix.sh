@@ -7,7 +7,7 @@ mkdir build_temp
 cd build_temp
 cmake -DBUILD_SHARED_LIBS=ON ../../
 make
-cd..
+cd ..
 
 if [ $? -ne 0 ]
 then
