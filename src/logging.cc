@@ -165,6 +165,8 @@ GLOG_DEFINE_int32(logfile_mode, 0664, "Log file mode/permissions.");
 GLOG_DEFINE_string(log_dir, DefaultLogDir(),
                    "If specified, logfiles are written into this directory instead "
                    "of the default logging directory.");
+GLOG_DEFINE_string(logday_prev, "", "logday_prev");
+GLOG_DEFINE_string(logday_now, "", "logday_now");
 GLOG_DEFINE_string(log_link, "", "Put additional links to the log "
                    "files in this directory");
 
@@ -367,13 +369,13 @@ struct LogMessage::LogMessageData  {
 static Mutex log_mutex;
 
 // Number of messages sent at each severity.  Under log_mutex.
-int64 LogMessage::num_messages_[NUM_SEVERITIES] = {0, 0, 0, 0};
+int64 LogMessage::num_messages_[NUM_SEVERITIES] = {0, 0, 0, 0, 0};
 
 // Globally disable log writing (if disk is full)
 static bool stop_writing = false;
 
 const char*const LogSeverityNames[NUM_SEVERITIES] = {
-  "INFO", "WARNING", "ERROR", "FATAL"
+  "DEBUG", "INFO", "WARN", "ERROR", "FATAL"
 };
 
 // Has the user called SetExitOnDFatal(true)?
@@ -442,6 +444,9 @@ class LogFileObject : public base::Logger {
   // supplied argument time_pid_string
   // REQUIRES: lock_ is held
   bool CreateLogfile(const string& time_pid_string);
+  
+  // Roll day file
+  void RollLogFile();
 };
 
 }  // namespace
@@ -900,15 +905,19 @@ void LogFileObject::FlushUnlocked(){
 }
 
 bool LogFileObject::CreateLogfile(const string& time_pid_string) {
-  string string_filename = base_filename_+filename_extension_+
-                           time_pid_string;
+  string string_filename = base_filename_+filename_extension_;
+                           
   const char* filename = string_filename.c_str();
-  int fd = open(filename, O_WRONLY | O_CREAT | O_EXCL, FLAGS_logfile_mode);
+  int fd = open(filename, O_RDWR | O_EXCL | O_APPEND, FLAGS_logfile_mode);//追加
+  if (fd == -1) fd = open(filename, O_RDWR | O_EXCL | O_CREAT, FLAGS_logfile_mode);//创建
   if (fd == -1) return false;
 #ifdef HAVE_FCNTL
   // Mark the file close-on-exec. We don't really care if this fails
   fcntl(fd, F_SETFD, FD_CLOEXEC);
 #endif
+
+  //file size
+  file_length_ = lseek(fd, 0, SEEK_END);
 
   file_ = fdopen(fd, "a");  // Make a FILE*.
   if (file_ == NULL) {  // Man, we're screwed!
@@ -970,11 +979,12 @@ void LogFileObject::Write(bool force_flush,
   }
 
   if (static_cast<int>(file_length_ >> 20) >= MaxLogSize() ||
-      PidHasChanged()) {
+      PidHasChanged() || FLAGS_logday_now != FLAGS_logday_prev) {
     if (file_ != NULL) fclose(file_);
     file_ = NULL;
     file_length_ = bytes_since_flush_ = dropped_mem_length_ = 0;
     rollover_attempt_ = kRolloverAttemptFrequency-1;
+    RollLogFile();
   }
 
   // If there's no destination file, make one before outputting
@@ -1130,6 +1140,24 @@ void LogFileObject::Write(bool force_flush,
   }
 }
 
+void LogFileObject::RollLogFile() {
+  if(FLAGS_logday_prev.empty() || FLAGS_logday_now.empty() || base_filename_.empty()) return;
+  
+  std::string oldfile = base_filename_ + filename_extension_;
+  static char newfile[1024] = { 0 };    
+  int index = 0;
+  
+  while(true) {
+    sprintf(newfile, "%s-%s-%d%s", base_filename_.c_str(), FLAGS_logday_prev.c_str(), ++index, filename_extension_.c_str()); 
+    if (0 != access(newfile, 0)) {
+      rename(oldfile.c_str(), newfile);
+      break;
+    }
+  }
+  
+  FLAGS_logday_prev = FLAGS_logday_now;
+}
+
 }  // namespace
 
 
@@ -1181,6 +1209,11 @@ LogMessage::LogMessage(const char* file, int line, LogSeverity severity)
   Init(file, line, severity, &LogMessage::SendToLog);
 }
 
+LogMessage::LogMessage(const char* file, int line, const char* func, LogSeverity severity)
+    : allocated_(NULL) {
+  Init(file, line, severity, &LogMessage::SendToLog, func);
+}
+
 LogMessage::LogMessage(const char* file, int line, LogSeverity severity,
                        LogSink* sink, bool also_send_to_log)
     : allocated_(NULL) {
@@ -1206,7 +1239,8 @@ LogMessage::LogMessage(const char* file, int line, LogSeverity severity,
 void LogMessage::Init(const char* file,
                       int line,
                       LogSeverity severity,
-                      void (LogMessage::*send_method)()) {
+                      void (LogMessage::*send_method)(),
+                      const char* func /*= nullptr*/) {
   allocated_ = NULL;
   if (severity != GLOG_FATAL || !exit_on_dfatal) {
 #ifdef GLOG_THREAD_LOCAL_STORAGE
@@ -1259,19 +1293,48 @@ void LogMessage::Init(const char* file,
   //    (log level, GMT month, date, time, thread_id, file basename, line)
   // We exclude the thread_id for the default thread.
   if (FLAGS_log_prefix && (line != kNoLogPrefix)) {
-    stream() << LogSeverityNames[severity][0]
-             << setw(2) << 1+data_->tm_time_.tm_mon
-             << setw(2) << data_->tm_time_.tm_mday
-             << ' '
-             << setw(2) << data_->tm_time_.tm_hour  << ':'
-             << setw(2) << data_->tm_time_.tm_min   << ':'
-             << setw(2) << data_->tm_time_.tm_sec   << "."
-             << setw(6) << usecs
-             << ' '
-             << setfill(' ') << setw(5)
-             << static_cast<unsigned int>(GetTID()) << setfill('0')
-             << ' '
-             << data_->basename_ << ':' << data_->line_ << "] ";
+    if(func) { 
+        stream() << '['
+            << LogSeverityNames[severity]
+            << ' '
+            << setw(4) << 1900 + data_->tm_time_.tm_year
+            << '-'
+            << setw(2) << 1 + data_->tm_time_.tm_mon
+            << '-'
+            << setw(2) << data_->tm_time_.tm_mday
+            << ' '
+            << setw(2) << data_->tm_time_.tm_hour << ':'
+            << setw(2) << data_->tm_time_.tm_min << ':'
+            << setw(2) << data_->tm_time_.tm_sec << "."
+            << setw(3) << usecs
+            << ' '
+            << setfill(' ') << setw(5)
+            << static_cast<unsigned int>(GetTID()) << setfill('0')
+            << ' '
+            << data_->basename_ 
+            << ' '
+            << '(' << data_->line_ << ')'
+            << ' ' << func << "] ";
+    } else {
+        stream() << '[' 
+            << LogSeverityNames[severity]
+            << ' '
+            << setw(4) << 1900 + data_->tm_time_.tm_year
+            << '-'
+            << setw(2) << 1 + data_->tm_time_.tm_mon
+            << '-'
+            << setw(2) << data_->tm_time_.tm_mday
+            << ' '
+            << setw(2) << data_->tm_time_.tm_hour << ':'
+            << setw(2) << data_->tm_time_.tm_min << ':'
+            << setw(2) << data_->tm_time_.tm_sec << "."
+            << setw(3) << usecs
+            << ' '
+            << setfill(' ') << setw(5)
+            << static_cast<unsigned int>(GetTID()) << setfill('0')
+            << ' '
+            << data_->basename_ << ':' << data_->line_ << "] ";
+    }         
   }
   data_->num_prefix_chars_ = data_->stream_.pcount();
 

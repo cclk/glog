@@ -1,0 +1,43 @@
+{
+    "preDefines": {
+        "version": "version-template",
+        "author": "唐乐军"
+    },
+    "nuspecs": [
+        {
+            "nuspec": {
+                "id": "Cvte.logger.native.dynamic.md_d",
+                "version":"${version}",
+                "authors":"${author}",
+                "description":"基于glog的c++日志库，适用于各c++项目，模块日志建议使用mlog"
+            },            
+            "target": {
+                "source":"./build",
+                "conditions": {
+                    "PlatformToolset": [
+                        "v140"
+                    ],
+                    "Configuration": [
+                        "debug",
+                        "release"
+                    ],
+                    "Platform": [
+                        "win32"
+                    ]
+                },
+                "include":{
+                    "file":["include/"]
+                },
+                "lib":{
+                    "file":["${PlatformToolset}/dynamic/bin/${Configuration}/*.lib"]
+                
+                },
+                "dll":{
+                    "file":["${PlatformToolset}/dynamic/bin/${Configuration}/*.dll","${PlatformToolset}/dynamic/bin/${Configuration}/*.pdb"]
+                
+                }
+            }
+        }      
+        
+    ]
+}

@@ -361,6 +361,9 @@ DECLARE_int32(minloglevel);
 // default logging directory.
 DECLARE_string(log_dir);
 
+DECLARE_string(logday_prev);
+DECLARE_string(logday_now);
+
 // Set the log file mode.
 DECLARE_int32(logfile_mode);
 
@@ -1204,6 +1207,7 @@ public:
   // Using this constructor instead of the more complex constructor above
   // saves 17 bytes per call site.
   LogMessage(const char* file, int line, LogSeverity severity);
+  LogMessage(const char* file, int line, const char* func, LogSeverity severity);
 
   // Constructor to log this message to a specified sink (if not NULL).
   // Implied are: ctr = 0, send_method = &LogMessage::SendToSinkAndLog if
@@ -1265,7 +1269,7 @@ private:
   void SaveOrSendToLog();  // Save to stringvec if provided, else to logs
 
   void Init(const char* file, int line, LogSeverity severity,
-            void (LogMessage::*send_method)());
+            void (LogMessage::*send_method)(), const char* func = nullptr);
 
   // Used to fill in crash information during LOG(FATAL) failures.
   void RecordCrashReason(glog_internal_namespace_::CrashReason* reason);

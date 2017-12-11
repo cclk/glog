@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.0)
+cmake_minimum_required (VERSION 2.8)
 
 if (POLICY CMP0042)
   cmake_policy (SET CMP0042 NEW)
@@ -391,6 +391,10 @@ set (GLOG_SRCS
   src/utilities.cc
   src/utilities.h
   src/vlog_is_on.cc
+  build/logger/logger.h
+  build/logger/logger.cc
+  build/logger/utils.h
+  build/logger/utils.cc
 )
 
 if (HAVE_PTHREAD OR WIN32)
@@ -564,6 +568,12 @@ if (BUILD_TESTING)
   )
 
   target_link_libraries (utilities_unittest PRIVATE glog)
+  
+  add_executable (glog_test
+    build/glog_test/glog_test.cc
+  )
+  
+  target_link_libraries (glog_test PRIVATE glog)
 
   if (HAVE_STACKTRACE AND HAVE_SYMBOLIZE)
     add_executable (signalhandler_unittest
@@ -620,3 +630,13 @@ install (FILES
 
 install (EXPORT glog-targets NAMESPACE glog:: DESTINATION
   ${_glog_CMake_INSTALLDIR})
+
+#pdb、c11支持
+IF(MSVC)
+    SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi")
+    SET(CMAKE_C_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi")
+    SET(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE} /DEBUG")
+    ADD_DEFINITIONS(-DHAVE_SNPRINTF)
+ELSEIF(UNIX)
+    SET(CMAKE_CXX_FLAGS "-std=c++11 -g -O2 -pthread -fopenmp")
+ENDIF()
