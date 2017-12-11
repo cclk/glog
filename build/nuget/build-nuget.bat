@@ -1,5 +1,5 @@
 cd "%~dp0"
-call "%~dp0\build-win32.bat"
+call "%~dp0\..\build-win32.bat"
 
 cd "%~dp0"
 set builddir=%cd%
@@ -11,8 +11,10 @@ md build\include\glog
 md build\include\Logger
 
 xcopy /E ..\build_temp\glog\*.*     build\include\glog\
-copy     ..\logger\logger.h         build\include\glog\logger.h
-copy     Logger.h                   build\include\Logger\Logger.h
+copy ..\..\src\glog\log_severity.h  build\include\glog\log_severity.h
+copy ..\logger\logger.h             build\include\glog\logger.h
+copy Logger.h                       build\include\Logger\Logger.h
+
 
 "%PROGRAMFILES(x86)%\MSBuild\14.0\Bin\MSbuild.exe" "..\build_temp\glog.sln" /t:glog /p:PlatformToolset=v140 /p:configuration=Debug    /p:OutDir=%builddir%\build\v140\dynamic\bin\debug\
 "%PROGRAMFILES(x86)%\MSBuild\14.0\Bin\MSbuild.exe" "..\build_temp\glog.sln" /t:glog /p:PlatformToolset=v140 /p:configuration=Release  /p:OutDir=%builddir%\build\v140\dynamic\bin\release\
@@ -33,7 +35,7 @@ call version.bat
 create_nuget glog.json
 
 echo "next upload to cvte nuget server"
-::nuget push *.nupkg  -source http://iipdev.gz.cvte.cn:8080 CVTE
+nuget push *.nupkg  -source http://iipdev.gz.cvte.cn:8080 CVTE
 
 cd "%~dp0"
 
