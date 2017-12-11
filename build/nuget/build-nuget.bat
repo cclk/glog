@@ -19,7 +19,9 @@ copy Logger.h                       build\include\Logger\Logger.h
 "%PROGRAMFILES(x86)%\MSBuild\14.0\Bin\MSbuild.exe" "..\build_temp\glog.sln" /t:glog /p:PlatformToolset=v140 /p:configuration=Debug    /p:OutDir=%builddir%\build\v140\dynamic\bin\debug\
 "%PROGRAMFILES(x86)%\MSBuild\14.0\Bin\MSbuild.exe" "..\build_temp\glog.sln" /t:glog /p:PlatformToolset=v140 /p:configuration=Release  /p:OutDir=%builddir%\build\v140\dynamic\bin\release\
 
+copy ..\build_temp\Debug\glog.lib   %builddir%\build\v140\dynamic\bin\debug\glog.lib
 copy ..\build_temp\Debug\glog.pdb   %builddir%\build\v140\dynamic\bin\debug\glog.pdb
+copy ..\build_temp\Release\glog.lib %builddir%\build\v140\dynamic\bin\release\glog.lib
 copy ..\build_temp\Release\glog.pdb %builddir%\build\v140\dynamic\bin\release\glog.pdb
 
 ::::::::::::::::::::::::::::::::::::::::::::nuget build
