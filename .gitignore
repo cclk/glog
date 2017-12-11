@@ -10,3 +10,9 @@ config.h
 *.vcxproj
 *.filters
 /build/build_temp
+/build/nuget/build
+/build/nuget/Cvte.logger.native.dynamic.md_d.targets
+/build/nuget/UseLibraryMethod-propertiesui.xml
+/build/nuget/glog.json
+/build/nuget/*.nupkg
+/build/nuget/*.nuspec
